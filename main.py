@@ -5,6 +5,9 @@ Usage:
     python main.py --idea "A young astronaut discovers a living planet"
     python main.py --idea "..." --style "anime" --output my_film.mp4
     python main.py --idea "..." --screenplay-only   # skip image/audio/video
+    python main.py --idea "..." --serve             # generate then open browser player
+    python main.py --serve-only                     # serve already-generated videos
+    python main.py --serve-only --port 9000         # custom port
 """
 from __future__ import annotations
 
@@ -41,8 +44,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--idea",
-        required=True,
-        help="Your story idea (any length, any language).",
+        default="",
+        help="Your story idea (any length, any language). Required unless --serve-only is set.",
     )
     parser.add_argument(
         "--style",
@@ -86,6 +89,27 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Target video duration in seconds (default: 180).",
+    )
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="After generation, start a local web server to stream / download the video.",
+    )
+    parser.add_argument(
+        "--serve-only",
+        action="store_true",
+        help="Skip generation and just start the web server for already-generated videos.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port for the built-in web server (default: 8080).",
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Do not open the browser automatically when starting the server.",
     )
     return parser.parse_args()
 
@@ -135,6 +159,21 @@ def main() -> int:
     # ------------------------------------------------------------------
     from src.config import get_config
     cfg = get_config()
+
+    # ------------------------------------------------------------------
+    # Serve-only: just start the web server, no generation
+    # ------------------------------------------------------------------
+    if args.serve_only:
+        from src.server import start_server
+        start_server(cfg.output_dir, port=args.port, open_browser=not args.no_browser)
+        return 0
+
+    # ------------------------------------------------------------------
+    # Validate --idea is present for generation paths
+    # ------------------------------------------------------------------
+    if not args.idea:
+        print("error: --idea is required unless --serve-only is set.", file=sys.stderr)
+        return 1
 
     if args.scenes:
         cfg.max_scenes = args.scenes
@@ -198,6 +237,14 @@ def main() -> int:
     video_path = va.assemble(sp, output_filename=args.output)
 
     print(f"\n🎉  Your animated cinematic film is ready:\n    {video_path}\n")
+
+    # ------------------------------------------------------------------
+    # Step 5 (optional) – Serve for download / playback
+    # ------------------------------------------------------------------
+    if args.serve:
+        from src.server import start_server
+        start_server(cfg.output_dir, port=args.port, open_browser=not args.no_browser)
+
     return 0
 
 

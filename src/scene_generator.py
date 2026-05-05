@@ -126,14 +126,24 @@ class SceneGenerator:
         draw = ImageDraw.Draw(img)
 
         # Try to use a basic font; fall back to default if unavailable
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 40)
-            small_font = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28
-            )
-        except OSError:
-            font = ImageFont.load_default()
-            small_font = font
+        _FONT_CANDIDATES = [
+            # Linux
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            # macOS
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/Library/Fonts/Arial.ttf",
+            # Windows
+            "C:/Windows/Fonts/arial.ttf",
+        ]
+        font = ImageFont.load_default()
+        small_font = font
+        for _fp in _FONT_CANDIDATES:
+            try:
+                font = ImageFont.truetype(_fp, 40)
+                small_font = ImageFont.truetype(_fp, 28)
+                break
+            except OSError:
+                continue
 
         label = f"Shot {shot.shot_number}  [{shot.shot_type.value.upper()}]"
         desc_lines = _wrap_text(shot.description, 80)

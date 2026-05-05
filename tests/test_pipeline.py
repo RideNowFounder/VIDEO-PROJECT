@@ -222,3 +222,92 @@ class TestPipelineIntegration:
         for scene in sp.scenes:
             for shot in scene.shots:
                 assert shot.image_path and Path(shot.image_path).exists()
+
+
+# ---------------------------------------------------------------------------
+# Server
+# ---------------------------------------------------------------------------
+
+class TestServer:
+    def _get(self, server, path: str):
+        """Make a GET request to the running server and return (status, body)."""
+        import http.client
+        host, port = server.server_address
+        conn = http.client.HTTPConnection(f"localhost:{port}", timeout=5)
+        conn.request("GET", path)
+        resp = conn.getresponse()
+        body = resp.read()
+        conn.close()
+        return resp.status, body
+
+    def test_index_empty(self, tmp_path):
+        """Index page loads with 200 and shows 'No videos found' when output is empty."""
+        from src.server import start_server
+
+        srv = start_server(tmp_path, port=0, open_browser=False, block=False)
+        try:
+            status, body = self._get(srv, "/")
+            assert status == 200
+            assert b"No videos found" in body
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_index_with_video(self, tmp_path):
+        """Index page lists an MP4 file and shows a download button."""
+        from src.server import start_server
+
+        # Create a tiny fake MP4
+        fake_mp4 = tmp_path / "my_film.mp4"
+        fake_mp4.write_bytes(b"\x00" * 1024)
+
+        srv = start_server(tmp_path, port=0, open_browser=False, block=False)
+        try:
+            status, body = self._get(srv, "/")
+            assert status == 200
+            assert b"my_film.mp4" in body
+            assert b"Download" in body
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_file_download(self, tmp_path):
+        """Requesting a file directly returns its bytes."""
+        from src.server import start_server
+
+        content = b"FAKE_MP4_CONTENT"
+        (tmp_path / "film.mp4").write_bytes(content)
+
+        srv = start_server(tmp_path, port=0, open_browser=False, block=False)
+        try:
+            status, body = self._get(srv, "/film.mp4")
+            assert status == 200
+            assert body == content
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_path_traversal_blocked(self, tmp_path):
+        """Requests that try to escape output_dir are rejected with 403 or 404."""
+        from src.server import start_server
+
+        srv = start_server(tmp_path, port=0, open_browser=False, block=False)
+        try:
+            # Use a relative path traversal that doesn't rely on any specific OS file
+            status, _ = self._get(srv, "/%2e%2e/outside.txt")
+            assert status in (403, 404)
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_missing_file_returns_404(self, tmp_path):
+        """Requesting a non-existent file returns 404."""
+        from src.server import start_server
+
+        srv = start_server(tmp_path, port=0, open_browser=False, block=False)
+        try:
+            status, _ = self._get(srv, "/nonexistent.mp4")
+            assert status == 404
+        finally:
+            srv.shutdown()
+            srv.server_close()

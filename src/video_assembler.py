@@ -151,7 +151,7 @@ class VideoAssembler:
             y_off = (new_h - h) // 2
 
             frame_img = Image.fromarray(arr)
-            frame_img = frame_img.resize((new_w, new_h), Image.LANCZOS)
+            frame_img = frame_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
             frame_arr = np.array(frame_img)
             return frame_arr[y_off : y_off + h, x_off : x_off + w]
 
@@ -170,7 +170,7 @@ def _resize_cover(img, target_w: int, target_h: int):
     scale = max(target_w / orig_w, target_h / orig_h)
     new_w = math.ceil(orig_w * scale)
     new_h = math.ceil(orig_h * scale)
-    img = img.resize((new_w, new_h), Image.LANCZOS)
+    img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
     x = (new_w - target_w) // 2
     y = (new_h - target_h) // 2

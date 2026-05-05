@@ -16,6 +16,7 @@ final rendered MP4 – all in one command.
 | 🎬 **Ken Burns effect** | Smooth zoom/pan on each shot for a cinematic feel |
 | 🔀 **Crossfade transitions** | Smooth dissolve between every shot |
 | 🎵 **Music prompts** | Per-shot background-music description (ready for Suno / Udio) |
+| 🌐 **Built-in web player** | One command spins up a local server – stream or download your film in any browser |
 | 📦 **Offline demo mode** | Works without any API keys – placeholder images + silent audio |
 
 ---
@@ -41,6 +42,15 @@ cp .env.example .env
 # Full pipeline: screenplay → images → audio → video
 python main.py --idea "A young astronaut discovers a living planet full of music"
 
+# Generate AND open browser player/downloader when done
+python main.py --idea "A young astronaut discovers a living planet full of music" --serve
+
+# Serve already-generated videos for download/playback (no re-generation)
+python main.py --serve-only
+
+# Custom port
+python main.py --serve-only --port 9000
+
 # Custom style
 python main.py --idea "A samurai ghost searches for redemption" --style "anime ink-wash"
 
@@ -52,6 +62,15 @@ python main.py --idea "..." --scenes 4 --shots 3 --duration 120
 ```
 
 The final MP4 is saved to `output/<title>.mp4`.
+
+### 🌐 Download & Play Your Video
+
+After generating, point your browser at `http://localhost:8080` to see a gallery
+of all your films with an HTML5 in-browser player and a **⬇ Download** button.
+
+```bash
+python main.py --serve-only        # browse http://localhost:8080
+```
 
 ---
 
@@ -68,7 +87,8 @@ VIDEO-PROJECT/
 │   ├── story_generator.py   # LLM screenplay writer
 │   ├── scene_generator.py   # AI image generator (DALL-E 3)
 │   ├── audio_generator.py   # TTS narration generator
-│   └── video_assembler.py   # MoviePy video renderer
+│   ├── video_assembler.py   # MoviePy video renderer
+│   └── server.py            # Built-in HTTP server (stream + download)
 └── tests/
     └── test_pipeline.py     # Offline unit + integration tests
 ```
