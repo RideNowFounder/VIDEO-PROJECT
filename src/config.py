@@ -48,8 +48,8 @@ class Config:
     # Video settings
     # ------------------------------------------------------------------ #
     video_fps: int = field(default_factory=lambda: int(os.getenv("VIDEO_FPS", "24")))
-    video_width: int = field(default_factory=lambda: int(os.getenv("VIDEO_WIDTH", "1920")))
-    video_height: int = field(default_factory=lambda: int(os.getenv("VIDEO_HEIGHT", "1080")))
+    video_width: int = field(default_factory=lambda: int(os.getenv("VIDEO_WIDTH", "1080")))
+    video_height: int = field(default_factory=lambda: int(os.getenv("VIDEO_HEIGHT", "1920")))
     # Ken Burns zoom range (1.0 = no zoom, 1.1 = 10 % zoom)
     zoom_factor: float = field(
         default_factory=lambda: float(os.getenv("ZOOM_FACTOR", "1.08"))
@@ -62,7 +62,7 @@ class Config:
     # Story generation
     # ------------------------------------------------------------------ #
     target_duration_seconds: int = field(
-        default_factory=lambda: int(os.getenv("TARGET_DURATION_SECONDS", "180"))
+        default_factory=lambda: int(os.getenv("TARGET_DURATION_SECONDS", "60"))
     )
     shots_per_scene: int = field(
         default_factory=lambda: int(os.getenv("SHOTS_PER_SCENE", "4"))
@@ -70,6 +70,7 @@ class Config:
     max_scenes: int = field(
         default_factory=lambda: int(os.getenv("MAX_SCENES", "6"))
     )
+    tts_language: str = field(default_factory=lambda: os.getenv("TTS_LANGUAGE", "hi"))
 
     def __post_init__(self) -> None:
         self.output_dir = Path(self.output_dir)

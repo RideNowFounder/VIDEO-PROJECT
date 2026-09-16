@@ -4,14 +4,14 @@ optionally assembles a background music track.
 
 Backends (in priority order):
   1. ElevenLabs  – high-quality TTS (requires ELEVENLABS_API_KEY)
-  2. gTTS        – free Google TTS (requires internet)
+  2. gTTS        – free Google TTS (Hindi/Hinglish capable, requires internet)
   3. pyttsx3     – offline TTS
-  4. Silent WAV  – plain fallback (no voice, generates silence)
+  4. Audible WAV tone-bed fallback (clearly marked as non-speech)
 """
 from __future__ import annotations
 
 import logging
-import os
+import math
 import wave
 import struct
 from pathlib import Path
@@ -67,13 +67,12 @@ class AudioGenerator:
 
     # ------------------------------------------------------------------
     def _generate_audio(self, shot: Shot, scene_number: int, text: str) -> Path:
-        filename = f"scene{scene_number:02d}_shot{shot.shot_number:03d}.mp3"
-        out_path = self._audio_dir / filename
+        stem = f"scene{scene_number:02d}_shot{shot.shot_number:03d}"
+        out_path = self._audio_dir / f"{stem}.mp3"
 
         if out_path.exists():
             return out_path
 
-        # Try backends in order
         if self.cfg.has_elevenlabs:
             if self._try_elevenlabs(text, out_path):
                 return out_path
@@ -81,19 +80,16 @@ class AudioGenerator:
         if self._try_gtts(text, out_path):
             return out_path
 
-        if self._try_pyttsx3(text, out_path):
-            return out_path
+        wav_out = self._audio_dir / f"{stem}.wav"
+        if self._try_pyttsx3(text, wav_out):
+            return wav_out
 
-        # Ultimate fallback: generate a silent WAV (renamed to .mp3 – most
-        # players / moviepy accept it even with the wrong extension)
-        wav_path = out_path.with_suffix(".wav")
-        _write_silent_wav(wav_path, duration_seconds=shot.duration_seconds)
-        wav_path.rename(out_path)
+        _write_tone_bed_wav(wav_out, duration_seconds=max(shot.duration_seconds, 1.0))
         logger.warning(
-            "No TTS backend available – wrote silent audio for shot %d.",
+            "No speech backend available – wrote audible fallback tone-bed for shot %d.",
             shot.shot_number,
         )
-        return out_path
+        return wav_out
 
     # ------------------------------------------------------------------
     def _try_elevenlabs(self, text: str, out_path: Path) -> bool:
@@ -120,12 +116,11 @@ class AudioGenerator:
             return False
 
     # ------------------------------------------------------------------
-    @staticmethod
-    def _try_gtts(text: str, out_path: Path) -> bool:
+    def _try_gtts(self, text: str, out_path: Path) -> bool:
         try:
             from gtts import gTTS  # type: ignore
 
-            tts = gTTS(text=text, lang="en", slow=False)
+            tts = gTTS(text=text, lang=self.cfg.tts_language, tld="co.in", slow=False)
             tts.save(str(out_path))
             logger.info("gTTS audio saved: %s", out_path)
             return True
@@ -134,18 +129,15 @@ class AudioGenerator:
             return False
 
     # ------------------------------------------------------------------
-    @staticmethod
-    def _try_pyttsx3(text: str, out_path: Path) -> bool:
+    def _try_pyttsx3(self, text: str, out_path: Path) -> bool:
         try:
             import pyttsx3  # type: ignore
 
             engine = pyttsx3.init()
             engine.setProperty("rate", 150)
             engine.setProperty("volume", 0.9)
-            wav_path = out_path.with_suffix(".wav")
-            engine.save_to_file(text, str(wav_path))
+            engine.save_to_file(text, str(out_path))
             engine.runAndWait()
-            wav_path.rename(out_path)
             logger.info("pyttsx3 audio saved: %s", out_path)
             return True
         except Exception as exc:  # noqa: BLE001
@@ -157,11 +149,28 @@ class AudioGenerator:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _write_silent_wav(path: Path, duration_seconds: float, sample_rate: int = 44100) -> None:
-    """Write a PCM WAV file containing pure silence."""
+def _write_tone_bed_wav(path: Path, duration_seconds: float, sample_rate: int = 44100) -> None:
+    """Write a small audible fallback cue with periodic beeps."""
     num_samples = int(sample_rate * duration_seconds)
+    amplitude = 4200
+    base_freq = 220.0
+    beep_freq = 660.0
+    beep_interval = 0.9
+    beep_duration = 0.16
+
+    frames: list[int] = []
+    for i in range(num_samples):
+        t = i / sample_rate
+        envelope = 0.45 + 0.55 * math.sin(2 * math.pi * 0.25 * t)
+        sample = amplitude * envelope * math.sin(2 * math.pi * base_freq * t)
+        in_beep = (t % beep_interval) <= beep_duration
+        if in_beep:
+            sample += (amplitude * 1.5) * math.sin(2 * math.pi * beep_freq * t)
+        sample = max(min(int(sample), 32767), -32768)
+        frames.append(sample)
+
     with wave.open(str(path), "w") as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)  # 16-bit
         wf.setframerate(sample_rate)
-        wf.writeframes(struct.pack("<" + "h" * num_samples, *([0] * num_samples)))
+        wf.writeframes(struct.pack("<" + "h" * len(frames), *frames))
