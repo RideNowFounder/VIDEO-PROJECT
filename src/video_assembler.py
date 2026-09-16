@@ -38,13 +38,20 @@ class VideoAssembler:
         Build the final video from *screenplay* and return the output path.
         """
         try:
-            from moviepy.editor import (  # type: ignore
-                AudioFileClip,
-                CompositeAudioClip,
-                CompositeVideoClip,
-                ImageClip,
-                concatenate_videoclips,
-            )
+            try:
+                from moviepy.editor import (  # type: ignore
+                    AudioFileClip,
+                    CompositeVideoClip,
+                    ImageClip,
+                    concatenate_videoclips,
+                )
+            except ImportError:
+                from moviepy import (  # type: ignore
+                    AudioFileClip,
+                    CompositeVideoClip,
+                    ImageClip,
+                    concatenate_videoclips,
+                )
             from PIL import Image  # type: ignore
         except ImportError as exc:
             raise ImportError(
@@ -82,13 +89,15 @@ class VideoAssembler:
                 clip = self._make_ken_burns_clip(
                     img_path, duration, w, h, fps
                 )
+                subtitle_text = self._subtitle_for_shot(shot)
+                clip = self._add_subtitle_overlay(clip, subtitle_text, w, h)
 
                 # Attach per-shot audio if present
                 audio_path = shot.audio_path
                 if audio_path and Path(audio_path).exists():
                     try:
                         audio_clip = AudioFileClip(audio_path).subclip(0, duration)
-                        clip = clip.set_audio(audio_clip)
+                        clip = _with_audio(clip, audio_clip)
                     except Exception as exc:  # noqa: BLE001
                         logger.warning("Could not attach audio for shot %d: %s", shot.shot_number, exc)
 
@@ -99,7 +108,8 @@ class VideoAssembler:
 
         logger.info("Concatenating %d clips with crossfade…", len(clips))
         final = concatenate_videoclips(clips, method="compose", padding=-self.cfg.crossfade_duration)
-        final = final.fadein(0.5).fadeout(0.5)
+        if hasattr(final, "fadein") and hasattr(final, "fadeout"):
+            final = final.fadein(0.5).fadeout(0.5)
 
         logger.info("Writing final video → %s", output_path)
         final.write_videofile(
@@ -120,6 +130,40 @@ class VideoAssembler:
         logger.info("✅ Video ready: %s", output_path)
         return output_path
 
+    def _subtitle_for_shot(self, shot) -> str:
+        text = shot.audio.dialogue or shot.audio.narration or ""
+        if not text:
+            return ""
+        return text.strip()
+
+    def _add_subtitle_overlay(self, base_clip, subtitle: str, w: int, h: int):
+        if not subtitle:
+            return base_clip
+        try:
+            from PIL import Image, ImageDraw, ImageFont  # type: ignore
+        except ImportError:
+            return base_clip
+        try:
+            from moviepy.editor import ImageClip, CompositeVideoClip  # type: ignore
+        except ImportError:
+            from moviepy import ImageClip, CompositeVideoClip  # type: ignore
+
+        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        font = _load_subtitle_font(48)
+        wrapped = _wrap_text(subtitle, 34)
+        box_h = 110 + (max(1, len(wrapped)) * 56)
+        y0 = h - box_h - 90
+        draw.rounded_rectangle([(50, y0), (w - 50, h - 40)], radius=32, fill=(0, 0, 0, 165))
+        y = y0 + 28
+        for line in wrapped:
+            draw.text((90, y), line, fill=(255, 255, 255, 255), font=font)
+            y += 54
+        subtitle_clip = ImageClip(np.array(overlay))
+        subtitle_clip = _with_duration(subtitle_clip, base_clip.duration)
+        subtitle_clip = _with_position(subtitle_clip, ("center", "center"))
+        return CompositeVideoClip([base_clip, subtitle_clip], size=(w, h))
+
     # ------------------------------------------------------------------
     def _make_ken_burns_clip(
         self, image_path: str, duration: float, w: int, h: int, fps: int
@@ -129,7 +173,10 @@ class VideoAssembler:
         (gradual zoom), and return an ImageClip with the effect baked in as a
         VideoClip using make_frame.
         """
-        from moviepy.editor import VideoClip  # type: ignore
+        try:
+            from moviepy.editor import VideoClip  # type: ignore
+        except ImportError:
+            from moviepy import VideoClip  # type: ignore
         from PIL import Image  # type: ignore
 
         # ---- load & fit image ----
@@ -155,7 +202,10 @@ class VideoAssembler:
             frame_arr = np.array(frame_img)
             return frame_arr[y_off : y_off + h, x_off : x_off + w]
 
-        return VideoClip(make_frame, duration=duration)
+        try:
+            return VideoClip(make_frame, duration=duration)
+        except TypeError:
+            return VideoClip(frame_function=make_frame, duration=duration)
 
 
 # ---------------------------------------------------------------------------
@@ -175,3 +225,42 @@ def _resize_cover(img, target_w: int, target_h: int):
     x = (new_w - target_w) // 2
     y = (new_h - target_h) // 2
     return img.crop((x, y, x + target_w, y + target_h))
+
+
+def _with_duration(clip, duration: float):
+    if hasattr(clip, "with_duration"):
+        return clip.with_duration(duration)
+    return clip.set_duration(duration)
+
+
+def _with_position(clip, position):
+    if hasattr(clip, "with_position"):
+        return clip.with_position(position)
+    return clip.set_position(position)
+
+
+def _with_audio(clip, audio_clip):
+    if hasattr(clip, "with_audio"):
+        return clip.with_audio(audio_clip)
+    return clip.set_audio(audio_clip)
+
+
+def _load_subtitle_font(size: int):
+    from PIL import ImageFont  # type: ignore
+
+    font_candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    for fp in font_candidates:
+        try:
+            return ImageFont.truetype(fp, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _wrap_text(text: str, width: int) -> list[str]:
+    import textwrap
+
+    return textwrap.wrap(text, width)

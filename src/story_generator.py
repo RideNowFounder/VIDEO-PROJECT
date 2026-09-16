@@ -101,67 +101,125 @@ _USER_PROMPT = textwrap.dedent(
 # ---------------------------------------------------------------------------
 
 def _make_demo_screenplay(idea: str, cfg: Config) -> Screenplay:
-    """Return a hardcoded demo screenplay so offline tests pass."""
+    """Return the offline 60s Hinglish screenplay used when no API key is present."""
     characters = [
-        Character(name="Aria", description="A brave young explorer with golden hair", role="protagonist"),
-        Character(name="Shadow", description="A mysterious ancient spirit", role="antagonist"),
+        Character(
+            name="Aman",
+            description=(
+                "20-year-old Indian competitive-exam student, round glasses, messy "
+                "black hair, blue T-shirt, procrastinates but means well"
+            ),
+            role="protagonist",
+        ),
+        Character(
+            name="Ravi",
+            description="Aman's funny friend, curly black hair, yellow hoodie, always joking",
+            role="supporting",
+        ),
+        Character(
+            name="Mummy",
+            description=(
+                "Middle-aged Indian mother in colorful salwar suit, sarcastic but loving, "
+                "keeps Aman grounded"
+            ),
+            role="supporting",
+        ),
+    ]
+    scene_data = [
+        {
+            "title": "Messy Morning Promise",
+            "location": "Aman's messy study room",
+            "mood": MoodType.COMEDIC,
+            "shot_type": ShotType.WIDE,
+            "description": "Messy study table, books everywhere, Aman staring at syllabus in panic.",
+            "dialogue": "Aman: Aaj full focus. Kal se pakka wali aadat khatam.",
+        },
+        {
+            "title": "Mission Clean Desk",
+            "location": "Same room, table cleaning montage",
+            "mood": MoodType.COMEDIC,
+            "shot_type": ShotType.TRACKING,
+            "description": "Aman aggressively cleans table, arranges books, sprays confidence.",
+            "dialogue": "Narrator: Padhai se pehle safai. Classic topper illusion mode on.",
+        },
+        {
+            "title": "Mummy at the Door",
+            "location": "Outside Aman's room",
+            "mood": MoodType.COMEDIC,
+            "shot_type": ShotType.OVER_THE_SHOULDER,
+            "description": "Mummy stands outside door with raised eyebrow and steel-glass of chai.",
+            "dialogue": "Mummy: Beta padhai shuru hui ya timetable ka bhi trailer chal raha hai?",
+        },
+        {
+            "title": "Phone Trap",
+            "location": "Study table close-up",
+            "mood": MoodType.TENSE,
+            "shot_type": ShotType.CLOSE_UP,
+            "description": "Aman opens phone for one doubt video, then reels flood screen.",
+            "dialogue": "Aman: Bas 2 minute ke liye phone. Ravi meme bhej de toh ignore kaise karu?",
+        },
+        {
+            "title": "Clock Sprint",
+            "location": "Wall clock and study desk",
+            "mood": MoodType.COMEDIC,
+            "shot_type": ShotType.EXTREME_CLOSE_UP,
+            "description": "Clock hand jumps from 10 AM to 3 PM while Aman keeps scrolling.",
+            "dialogue": "Narrator: 10 baje start plan tha. 3 baje tak sirf motivation videos complete.",
+        },
+        {
+            "title": "Ravi Roast Finale",
+            "location": "Balcony corner study area",
+            "mood": MoodType.COMEDIC,
+            "shot_type": ShotType.MEDIUM,
+            "description": "Aman and Ravi laugh together as notebook reads 'Kal Se Pakka'.",
+            "dialogue": "Ravi: Bhai tera syllabus nahi, tera kal hi sabse consistent hai!",
+        },
     ]
     scenes = []
-    moods = [MoodType.ADVENTUROUS, MoodType.MYSTERIOUS, MoodType.DRAMATIC,
-             MoodType.TENSE, MoodType.TRIUMPHANT, MoodType.SERENE]
-    shot_types = [ShotType.WIDE, ShotType.MEDIUM, ShotType.CLOSE_UP, ShotType.AERIAL]
-    locations = [
-        "Ancient forest at dawn", "Mystical cave interior", "Mountain peak",
-        "Hidden temple ruins", "Glowing crystal valley", "Sky above the clouds",
-    ]
-
-    for i in range(min(cfg.max_scenes, 6)):
-        shots = []
-        for j in range(cfg.shots_per_scene):
-            shot_num = i * cfg.shots_per_scene + j + 1
-            shots.append(
-                Shot(
-                    shot_number=shot_num,
-                    shot_type=shot_types[j % len(shot_types)],
-                    duration_seconds=5.0,
-                    visual_prompt=(
-                        f"Cinematic animated scene, {locations[i]}, "
-                        f"shot {j+1}, high quality 3D animation, dramatic lighting, "
-                        f"vibrant colors, Pixar style"
-                    ),
-                    description=f"Scene {i+1}, shot {j+1} from the story: {idea[:60]}",
-                    camera_movement="slow push-in",
-                    lighting="cinematic",
-                    color_palette="warm golden tones with deep shadows",
-                    audio=AudioTrack(
-                        narration=f"And so the journey continues in {locations[i]}…",
-                        dialogue="",
-                        music_prompt="epic orchestral score, strings and horns",
-                        sound_effects=["wind", "footsteps"],
-                    ),
-                )
-            )
+    for idx, entry in enumerate(scene_data, start=1):
+        shot = Shot(
+            shot_number=idx,
+            shot_type=entry["shot_type"],
+            duration_seconds=10.0,
+            visual_prompt=(
+                "Original stylized 2D cartoon illustration, Indian student comedy, "
+                f"scene {idx}: {entry['description']}"
+            ),
+            description=entry["description"],
+            camera_movement="gentle push-in",
+            lighting="bright natural indoor daylight",
+            color_palette="warm Indian home tones with playful colors",
+            audio=AudioTrack(
+                narration=entry["dialogue"] if idx in (2, 5) else "",
+                dialogue=entry["dialogue"] if idx not in (2, 5) else "",
+                music_prompt="light comedic beat with playful percussion",
+                sound_effects=["clock tick", "page flip", "mobile ping"],
+            ),
+        )
         scenes.append(
             Scene(
-                scene_number=i + 1,
-                title=f"Chapter {i+1}: {locations[i]}",
-                location=locations[i],
-                time_of_day="dawn" if i == 0 else "day",
-                mood=moods[i % len(moods)],
-                scene_summary=f"Scene {i+1} of the story unfolds at {locations[i]}.",
-                shots=shots,
+                scene_number=idx,
+                title=entry["title"],
+                location=entry["location"],
+                time_of_day="day",
+                mood=entry["mood"],
+                scene_summary=entry["description"],
+                shots=[shot],
             )
         )
 
     return Screenplay(
-        title="The Animated Adventure",
-        genre="Adventure / Fantasy",
-        logline=f"A brave hero embarks on an epic quest inspired by: {idea[:80]}",
+        title="Kal Se Pakka",
+        genre="Hinglish Cartoon Comedy",
+        logline=(
+            "Aman plans a serious study day, but procrastination, Mummy's sarcasm, "
+            "and Ravi's jokes turn it into a 60-second comedy spiral."
+        ),
         original_idea=idea,
         characters=characters,
         scenes=scenes,
-        style=cfg.openai_model,
-        total_duration_target=float(cfg.target_duration_seconds),
+        style="Original programmatic cartoon illustration",
+        total_duration_target=60.0,
     )
 
 
